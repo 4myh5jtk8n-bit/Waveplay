@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI cells without nerves</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0b1f1a}
+body{display:flex;align-items:center;justify-content:center}
+.glass-overlay{position:fixed;inset:0;z-index:1;background-color:rgba(255,255,255,.16);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.18' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");background-repeat:repeat;background-size:400px 400px}
+.field{position:relative;z-index:2;width:82vmin;height:82vmin;max-width:950px;max-height:950px;background:#1e3a2e;border:2px solid #fff;border-radius:3px;overflow:hidden;will-change:transform}
+.field.hide-tiles .tile{display:none}
+.field.hide-beans .bean{display:none}
+.field.mode-cursor{cursor:crosshair}
+.hud{position:absolute;top:6px;left:6px;z-index:20;font:11px/1.5 ui-monospace,monospace;color:#eafff5;background:rgba(0,0,0,.45);padding:6px 9px;border-radius:4px;pointer-events:none;white-space:pre;text-shadow:0 1px 2px #000}
+.hud .blue{color:#7fe3b8}
+.hud .orange{color:#ffb877}
+.hud .warn{color:#ff8a6a}
+.panel{position:absolute;top:6px;right:6px;z-index:30;font:11px/1.5 ui-monospace,monospace;color:#eafff5;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);border-radius:6px;width:260px;max-height:calc(100% - 12px);display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(4px)}
+.panel.collapsed .panel-body{display:none}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,.1)}
+.panel-head:hover{background:rgba(255,255,255,.06)}
+.panel-title{font-weight:bold;letter-spacing:.5px}
+.panel-toggle{font-size:14px;opacity:.7}
+.panel-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.1)}
+.panel-tab{flex:1;padding:5px 0;text-align:center;cursor:pointer;user-select:none;opacity:.55;transition:opacity .15s,background .15s}
+.panel-tab.active{opacity:1;background:rgba(255,255,255,.08)}
+.panel-tab:hover{opacity:.85}
+.panel-body{padding:6px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.ctrl{position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;cursor:pointer;user-select:none;transition:background .12s}
+.ctrl:hover{background:rgba(255,255,255,.12)}
+.ctrl:active{transform:scale(.98)}
+.ctrl.armed{background:rgba(120,240,190,.18);border-color:rgba(120,240,190,.5);box-shadow:0 0 0 1px rgba(120,240,190,.35) inset}
+.ctrl-label{flex:1}
+.ctrl-hint{opacity:.5;font-size:10px}
+.ctrl.warn{background:rgba(255,138,106,.15);border-color:rgba(255,138,106,.35)}
+.ctrl.danger{background:rgba(255,90,60,.18);border-color:rgba(255,90,60,.45)}
+.sel-info{padding:6px 7px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:4px;font-size:10px;line-height:1.6;color:#cde8dd;min-height:60px;white-space:pre-wrap}
+.sel-info b{color:#fff}
+.sel-info .blue{color:#7fe3b8}
+.sel-info .orange{color:#ffb877}
+.brain-info{padding:5px 7px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.12);border-radius:4px;font-size:10px;line-height:1.55;color:#b9d8cc;white-space:pre-wrap}
+.brain-info .blue{color:#7fe3b8}
+.brain-info .orange{color:#ffb877}
+.weights-info{padding:5px 7px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.12);border-radius:4px;font-size:10px;line-height:1.55;color:#b9d8cc;white-space:pre-wrap}
+.weights-info .lbl{opacity:.6}
+.overlay-canvas{position:absolute;inset:0;z-index:15;pointer-events:none}
+.bean{position:absolute;width:6px;height:6px;border-radius:50%;background:#4aa8ff;box-shadow:0 0 5px rgba(74,168,255,.9);transform:translate(-50%,-50%) scale(0);pointer-events:none;z-index:2;animation:beanIn .4s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes beanIn{0%{transform:translate(-50%,-50%) scale(0);opacity:0}55%{transform:translate(-50%,-50%) scale(1.3);opacity:1}80%{transform:translate(-50%,-50%) scale(.9)}100%{transform:translate(-50%,-50%) scale(1)}}
+.tile{position:absolute;width:16px;height:16px;transform:translate(-50%,-50%);pointer-events:none;z-index:1;transition:background-color .3s ease}
+.tile.blue{background:rgba(95,199,154,.2)}
+.tile.orange{background:rgba(232,154,74,.2)}
+.cell{position:absolute;pointer-events:none;will-change:transform,opacity;z-index:3}
+.cell.selectable{pointer-events:auto;cursor:pointer}
+.cell.selected .cell-body{box-shadow:0 0 0 2px #fff, 0 0 14px rgba(255,255,255,.7), inset 0 0 6px rgba(255,255,255,.35)}
+.cell-body{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#b8f0d8,#5fc79a 55%,#2e8b62);box-shadow:0 0 8px rgba(120,240,190,.35),inset 0 0 6px rgba(255,255,255,.25);transform-origin:center;animation:breathe 1.8s ease-in-out infinite}
+.cell.predator .cell-body{background:radial-gradient(circle at 35% 30%,#ffd9a8,#e89a4a 55%,#a85e22);box-shadow:0 0 10px rgba(255,170,80,.5),inset 0 0 6px rgba(180,220,140,.35)}
+.cell.predator .pupil{background:#1a0e08}
+.cell.friend .cell-body{box-shadow:0 0 12px rgba(255,215,120,.75),inset 0 0 6px rgba(255,255,255,.3)}
+.cell.fighting .cell-body{box-shadow:0 0 14px rgba(255,90,60,.75),inset 0 0 6px rgba(255,180,120,.4);animation:breathe 1.8s ease-in-out infinite,fightPulse 1.2s ease-in-out infinite}
+.cell.carrier .cell-body{box-shadow:0 0 12px rgba(140,160,255,.7),inset 0 0 6px rgba(200,210,255,.35)}
+.cell.painting .cell-body{box-shadow:0 0 14px rgba(120,255,180,.85),inset 0 0 6px rgba(200,255,220,.5)}
+@keyframes breathe{0%{transform:scale(1,1)}50%{transform:scale(.86,1.1)}100%{transform:scale(1,1)}}
+@keyframes fightPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(.92) saturate(1.3)}}
+.cell.running .cell-body{animation:breatheFast .5s ease-in-out infinite}
+@keyframes breatheFast{0%{transform:scale(1,1)}45%{transform:scale(.7,1.22)}100%{transform:scale(1,1)}}
+.cell.dying .cell-body{animation:cellDie .65s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes cellDie{0%{transform:scale(1)}35%{transform:scale(1.2)}100%{transform:scale(.1);opacity:.15}}
+.cell.hit .cell-body{animation:hitShake .25s ease-out}
+@keyframes hitShake{0%{filter:brightness(1.8);transform:translate(1px,-1px)}50%{transform:translate(-1px,1px)}100%{filter:brightness(1);transform:translate(0,0)}}
+.cell.splitting .cell-body{animation:splitStretch .9s cubic-bezier(.5,0,.4,1) forwards}
+@keyframes splitStretch{0%{transform:scale(1)}35%{transform:scale(1.55,.85)}60%{transform:scale(1.7,.75)}100%{transform:scale(1.7,.75)}}
+.cell.splitting .cell-body::before,.cell.splitting .cell-body::after{content:'';position:absolute;top:0;bottom:0;width:50%;border-radius:50%;opacity:0}
+.cell.splitting:not(.predator) .cell-body::before,.cell.splitting:not(.predator) .cell-body::after{background:radial-gradient(circle at 35% 30%,#b8f0d8,#5fc79a 55%,#2e8b62)}
+.cell.splitting.predator .cell-body::before,.cell.splitting.predator .cell-body::after{background:radial-gradient(circle at 35% 30%,#ffd9a8,#e89a4a 55%,#a85e22)}
+.cell.splitting .cell-body::before{left:0;animation:splitLeft .6s ease-out .55s forwards}
+.cell.splitting .cell-body::after{right:0;animation:splitRight .6s ease-out .55s forwards}
+@keyframes splitLeft{0%{opacity:0;transform:translateX(0)}40%{opacity:1}100%{opacity:1;transform:translateX(-30%)}}
+@keyframes splitRight{0%{opacity:0;transform:translateX(0)}40%{opacity:1}100%{opacity:1;transform:translateX(30%)}}
+.eye{position:absolute;width:18%;height:34%;background:#fff;border-radius:50%;right:12%;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:4}
+.eye.left{top:26%}
+.eye.right{top:74%}
+.pupil{width:55%;height:55%;background:#0a0a0a;border-radius:50%;transform:translate(0,0);transition:transform .12s ease-out}
+.eye.dead .pupil{display:none}
+.eye.dead::before,.eye.dead::after{content:'';position:absolute;width:72%;height:14%;background:#0a0a0a;border-radius:2px;top:50%;left:50%}
+.eye.dead::before{transform:translate(-50%,-50%) rotate(45deg)}
+.eye.dead::after{transform:translate(-50%,-50%) rotate(-45deg)}
+.corpse{position:absolute;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,.4),inset 0 0 5px rgba(0,0,0,.5);transform:translate(-50%,-50%) scale(1);pointer-events:none;z-index:1}
+.corpse.blue{background:radial-gradient(circle at 40% 35%,#5a8a72,#2e4a3e 70%,#1a2c24)}
+.corpse.orange{background:radial-gradient(circle at 40% 35%,#c08a4a,#7a4a1a 70%,#3a2410)}
+.corpse.eaten{animation:corpseEat .25s ease-out}
+@keyframes corpseEat{0%{filter:brightness(1.8)}100%{filter:brightness(1)}}
+.vote-bubble{position:absolute;transform:translate(-50%,-50%);padding:3px 7px;background:rgba(255,255,255,.9);color:#1a1a1a;font:bold 10px/1 sans-serif;border-radius:8px;pointer-events:none;z-index:10;white-space:nowrap;animation:votePop 2.5s ease-out forwards}
+@keyframes votePop{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}15%{opacity:1;transform:translate(-50%,-120%) scale(1)}80%{opacity:1;transform:translate(-50%,-140%) scale(1)}100%{opacity:0;transform:translate(-50%,-160%) scale(.9)}}
+</style>
+</head>
+<body>
+<div class="glass-overlay"></div>
+<div class="field" id="field"></div>
+<script>
+(function(){
+'use strict';
+const field=document.getElementById('field');
+const CONFIG={
+beanSize:6,beanInterval:900,cellCount:10,predatorCount:10,cellLen:18,cellWid:10,
+speedIdle:28,speedChase:70,speedHunt:95,speedFlee:55,speedPredator:105,
+seekFoodRange:200,seekPreyRange:300,seekFriendRange:180,cycleTime:70000,idlePart:25000,
+eatRange:12,biteRange:5,dyingDuration:700,biteGiveUpTime:6000,handoffRange:22,
+preyBiteRange:22,biteCooldown:450,corpseEatRange:18,corpseMaxEats:3,
+mealsToSplit:3,splitDuration:1200,maxHP:3,eatHeal:1,friendChance:0.1,carrierStarveTime:5000,
+lifespanMin:60000,lifespanMax:120000,fatigueRate:0.08,fatigueRecover:0.15,
+corpseRotInterval:10000,corpseLifeTime:45000,visionCone:Math.PI*2/3,perceptionDelay:0.2,
+tileSize:16,invasionGiveUp:15000,alertRange:120,warKillMin:5,warKillMax:10,
+warTimeout:60000,hudUpdateMs:500,squadMax:8,squadClusterRadius:60,decisionCooldown:280,
+outcomeWindowMs:2000, // 窗口拉长到 2 秒，更能看出趋势
+weightsPeriodMs:20000,
+gridSize:64, // 空间网格尺寸
+};
+
+// === 扩充的动作组合（连招） ===
+const ACTIONS=[
+  {id:'eat', name:'吃'}, {id:'paint', name:'画格'}, {id:'invade', name:'抢格'},
+  {id:'fight', name:'战斗'}, {id:'flee', name:'逃跑'}, {id:'carrier', name:'后勤'},
+  {id:'social', name:'社交'}, {id:'wander', name:'游荡'},
+  {id:'eat_paint', name:'吃+画格', ops:['eat','paint']},
+  {id:'fight_social', name:'社交+战斗', ops:['social','fight']},
+  {id:'flee_carrier', name:'逃跑+后勤', ops:['flee','carrier']},
+  {id:'invade_fight', name:'抢格+战斗', ops:['invade','fight']}
+];
+const ACT_MAP={}; ACTIONS.forEach((a,i)=>ACT_MAP[a.id]=i);
+const ACT_COUNT=ACTIONS.length;
+
+const STATE_KEYS=['haveBean','haveEnemy','inOwnTile','inEnemyTile','hpLow','warActive','needFood','nearFriend'];
+const STATE_LABELS={haveBean:'有豆',haveEnemy:'有敌',inOwnTile:'己领地',inEnemyTile:'敌领地',hpLow:'低血',warActive:'战争中',needFood:'饿',nearFriend:'有友'};
+const OUTCOMES=['raceSafety','selfSafety','selfBirth','raceSurviveAvg','warDeclare','warWin'];
+const OUTCOME_LABELS={raceSafety:'种族安全性',selfSafety:'个人安全性',selfBirth:'个人生育率',raceSurviveAvg:'平均生存率',warDeclare:'宣战率',warWin:'战胜率'};
+const OUTCOME_COUNT=OUTCOMES.length;
+
+const state={paused:false,timeScale:1,showSquads:false,selected:null,activeMode:null,modeOwner:'blue',famineUntil:0,plagueUntil:0,plagueNextTick:0,brainPanelOpen:false};
+let beans=[],cells=[],predators=[],corpses=[];
+const tiles=new Map();
+// 空间网格
+const spatialGrid = new Map();
+let lastTime=performance.now();
+let nextBeanAt=0;
+const war={blue:{active:false,target:0,killed:0,startAt:0,deaths:0,declares:0},orange:{active:false,target:0,killed:0,startAt:0,deaths:0,declares:0}};
+const squads={blue:[],orange:[]};
+let squadPlanAt=0;
+const SQUAD_REPLAN_MS=800;
+
+// === 空间网格系统 ===
+function updateSpatialGrid(){
+  spatialGrid.clear();
+  const gs = CONFIG.gridSize;
+  for(let i=0;i<beans.length;i++){
+    const b = beans[i];
+    if(b.eaten || b.heldBy) continue;
+    const key = Math.floor(b.x/gs)+','+Math.floor(b.y/gs);
+    if(!spatialGrid.has(key)) spatialGrid.set(key, {beans:[], corpses:[]});
+    spatialGrid.get(key).beans.push(b);
+  }
+  for(let i=0;i<corpses.length;i++){
+    const c = corpses[i];
+    if(c.eaten) continue;
+    const key = Math.floor(c.x/gs)+','+Math.floor(c.y/gs);
+    if(!spatialGrid.has(key)) spatialGrid.set(key, {beans:[], corpses:[]});
+    spatialGrid.get(key).corpses.push(c);
+  }
+}
+function getNearbyEntities(x, y, type){
+  const gs = CONFIG.gridSize;
+  const gx = Math.floor(x/gs), gy = Math.floor(y/gs);
+  const results = [];
+  for(let dx=-1; dx<=1; dx++){
+    for(let dy=-1; dy<=1; dy++){
+      const cell = spatialGrid.get((gx+dx)+','+(gy+dy));
+      if(cell && cell[type]) results.push(...cell[type]);
+    }
+  }
+  return results;
+}
+
+function randWeights(){
+const a=new Array(OUTCOME_COUNT).fill(0).map(()=>Math.random()*0.5+0.3);
+let s=0;for(const v of a)s+=v;
+for(let i=0;i<a.length;i++)a[i]/=s;
+return a;
+}
+
+function makeBrain(){
+const w=randWeights();
+return{obs:{},exp:{},weights:w,weightBase:null,weightBaselineScore:null,lastWeightShift:performance.now()};
+}
+const brains={blue:makeBrain(),orange:makeBrain()};
+function brainOf(owner){return brains[owner]}
+function brainKey(obs){let s='';for(const k of STATE_KEYS)s+=(obs[k]?1:0);return s}
+
+// 字典更新：保留最优解
+function updateDictionary(brain,stateKey,actionId,score){
+  const dict = brain.exp;
+  if(!dict[stateKey]){
+    dict[stateKey] = { bestAction: actionId, score: score };
+  } else {
+    if(score > dict[stateKey].score) {
+      dict[stateKey].bestAction = actionId;
+      dict[stateKey].score = score;
+    }
+  }
+}
+
+function brainDecay(brain){
+  for(const key in brain.exp){
+    brain.exp[key].score *= 0.99; // 衰减加快一点，允许探索新路线
+  }
+}
+
+function brainChoose(brain,obs,ent){
+  const key=brainKey(obs);
+  const record = brain.exp[key];
+  
+  // 15% 概率随机探索
+  if(!record || Math.random() < 0.15 * (1 + ent.exploreBias)){
+    return ACTIONS[Math.floor(Math.random()*ACT_COUNT)].id;
+  }
+  return record.bestAction;
+}
+
+function computeRaceMetrics(owner){
+const list=listOfOwner(owner);
+let totalTiles=0;
+for(const t of tiles.values())if(t.owner===owner)totalTiles++;
+let totalHp=0;
+let n=0;
+for(const e of list){if(e.dying||e.dead)continue;totalHp+=e.hp;n++}
+const alive=n;
+const avgHp=n>0?totalHp/n:0;
+const warObj=war[owner];
+return{tiles:totalTiles,alive,avgHp,warActive:warObj.active,warKilled:warObj.killed,warDeaths:warObj.deaths,warDeclares:warObj.declares};
+}
+
+// === 核心趋势评估 ===
+function outcomeToScore(prev,cur){
+  const out={};
+  
+  out.raceSafety=Math.max(-1,Math.min(1,(cur.tiles-prev.tiles)*0.15));
+  
+  if(!cur.selfAlive){
+    out.selfSafety = -1.0; 
+  } else {
+    const hpDiff = cur.selfHp - prev.selfHp;
+    out.selfSafety = Math.max(-1, Math.min(1, hpDiff * 0.5));
+  }
+
+  if(prev.needFood) {
+     if(cur.selfMeals > prev.selfMeals) {
+        out.selfBirth = 0.8; 
+     } else {
+        out.selfBirth = -0.5; 
+     }
+  } else {
+     out.selfBirth = 0;
+  }
+
+  const dWin = cur.warKilled - prev.warKilled;
+  const dLoss = cur.warDeaths - prev.warDeaths;
+  out.warWin = Math.max(-1, Math.min(1, (dWin * 0.4 - dLoss * 0.6))); 
+
+  const totalPop = cur.alive || 1;
+  const surviveRatio = totalPop / (prev.alive || totalPop);
+  out.raceSurviveAvg = Math.max(-1, Math.min(1, (surviveRatio - 1) * 1.5));
+
+  return out;
+}
+
+function combineOutcomes(weights,out){
+let s=0;
+for(let i=0;i<OUTCOME_COUNT;i++){
+s+=weights[i]*(out[OUTCOMES[i]]||0);
+}
+return Math.max(-1,Math.min(1,s));
+}
+const rand=(a,b)=>a+Math.random()*(b-a);
+const dist=(ax,ay,bx,by)=>Math.hypot(ax-bx,ay-by);
+const fieldSize=()=>({w:field.clientWidth,h:field.clientHeight});
+function ownerOf(ent){return ent.type==='predator'?'orange':'blue'}
+function enemyOwnerOf(ent){return ownerOf(ent)==='blue'?'orange':'blue'}
+function listOfOwner(owner){return owner==='blue'?cells:predators}
+const tileKey=(gx,gy)=>gx+','+gy;
+function tileCenter(gx,gy){return{x:gx*CONFIG.tileSize+CONFIG.tileSize/2,y:gy*CONFIG.tileSize+CONFIG.tileSize/2}}
+function tileAt(x,y){const gx=Math.floor(x/CONFIG.tileSize);const gy=Math.floor(y/CONFIG.tileSize);return tiles.get(tileKey(gx,gy))}
+function isEnemyTileAt(x,y,entOwner){
+if(war[entOwner]&&war[entOwner].active)return null;
+const t=tileAt(x,y);
+if(!t)return null;
+if(t.owner===entOwner)return null;
+return t;
+}
+function pushOutOfEnemyTiles(ent){
+const owner=ownerOf(ent);
+if(war[owner]&&war[owner].active)return false;
+const t=isEnemyTileAt(ent.x,ent.y,owner);
+if(!t)return false;
+if(ent.invasionTarget&&ent.invasionTarget.gx===t.gx&&ent.invasionTarget.gy===t.gy)return false;
+const half=CONFIG.tileSize/2;
+const dx=ent.x-t.x,dy=ent.y-t.y;
+const toL=half+dx,toR=half-dx,toT=half+dy,toB=half-dy;
+const m=Math.min(toL,toR,toT,toB);
+const pad=CONFIG.cellWid*0.5;
+if(m===toL){ent.x=t.x-half-pad;ent.vx-=60}
+else if(m===toR){ent.x=t.x+half+pad;ent.vx+=60}
+else if(m===toT){ent.y=t.y-half-pad;ent.vy-=60}
+else{ent.y=t.y+half+pad;ent.vy+=60}
+return true;
+}
+function getTileEl(gx,gy,owner){
+const key=tileKey(gx,gy);
+let t=tiles.get(key);
+if(!t){
+const c=tileCenter(gx,gy);
+const el=document.createElement('div');
+el.className='tile '+owner;el.style.left=c.x+'px';el.style.top=c.y+'px';
+field.appendChild(el);
+t={owner,x:c.x,y:c.y,el,gx,gy};tiles.set(key,t);
+}else if(t.owner!==owner){t.el.className='tile '+owner;t.owner=owner}
+return t;
+}
+function paintTile(gx,gy,owner){return getTileEl(gx,gy,owner)}
+function clearTile(gx,gy){const key=tileKey(gx,gy);const t=tiles.get(key);if(!t)return false;if(t.el.parentNode)t.el.remove();tiles.delete(key);return true}
+function hasAnyTerritory(owner){for(const t of tiles.values())if(t.owner===owner)return true;return false}
+function hasAdjacentOwnTile(gx,gy,owner){const dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(const[dx,dy]of dirs){const t=tiles.get(tileKey(gx+dx,gy+dy));if(t&&t.owner===owner)return true}return false}
+function findPaintSpot(ent){
+const{w,h}=fieldSize();
+const owner=ownerOf(ent);
+const gx0=Math.floor(ent.x/CONFIG.tileSize);const gy0=Math.floor(ent.y/CONFIG.tileSize);
+const maxGX=Math.floor(w/CONFIG.tileSize)-1;const maxGY=Math.floor(h/CONFIG.tileSize)-1;
+const hasT=hasAnyTerritory(owner);
+for(let r=0;r<=3;r++){
+for(let dx=-r;dx<=r;dx++){
+for(let dy=-r;dy<=r;dy++){
+if(Math.abs(dx)!==r&&Math.abs(dy)!==r)continue;
+const gx=gx0+dx,gy=gy0+dy;
+if(gx<0||gy<0||gx>maxGX||gy>maxGY)continue;
+const t=tiles.get(tileKey(gx,gy));
+if(t)continue;
+if(hasT&&!hasAdjacentOwnTile(gx,gy,owner))continue;
+const c=tileCenter(gx,gy);
+if(dist(ent.x,ent.y,c.x,c.y)<=CONFIG.tileSize*2)return{gx,gy,x:c.x,y:c.y};
+}}}
+return null;
+}
+function findInvasionTarget(ent){
+const enemyOwner=enemyOwnerOf(ent);
+let best=null,bestD=Infinity;
+for(const t of tiles.values()){
+if(t.owner!==enemyOwner)continue;
+const d=dist(ent.x,ent.y,t.x,t.y);
+if(d<bestD){bestD=d;best=t}
+}
+if(best)return{x:best.x,y:best.y,gx:best.gx,gy:best.gy,tile:best};
+return null;
+}
+function clusterByProximity(list,radius){
+const clusters=[];const used=new Set();
+for(const a of list){
+if(used.has(a)||a.dying||a.splitting)continue;
+const group=[a];used.add(a);let changed=true;
+while(changed){changed=false;for(const b of list){if(used.has(b)||b.dying||b.splitting)continue;for(const g of group){if(dist(b.x,b.y,g.x,g.y)<=radius){group.push(b);used.add(b);changed=true;break}}}}
+clusters.push(group);
+}
+return clusters;
+}
+function splitIntoSquads(fighters){
+const n=fighters.length;
+if(n===0)return[];
+if(n<=CONFIG.squadMax)return[fighters.slice()];
+const numSquads=Math.ceil(n/CONFIG.squadMax);
+const base=Math.floor(n/numSquads);const rem=n-base*numSquads;
+const arr=fighters.slice();
+for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}
+const out=[];let idx=0;
+for(let s=0;s<numSquads;s++){const size=base+(s<rem?1:0);out.push(arr.slice(idx,idx+size));idx+=size}
+return out;
+}
+function planSquads(){
+for(const owner of['blue','orange']){
+const w=war[owner];squads[owner]=[];
+if(!w.active)continue;
+const list=listOfOwner(owner);
+const fighters=list.filter(e=>!e.dying&&!e.splitting&&e.hp>1&&(e.warRole==='fighting'||e.warRole==='pending'));
+if(fighters.length===0)continue;
+const groups=splitIntoSquads(fighters);
+for(const g of groups){
+let sx=0,sy=0;for(const e of g){sx+=e.x;sy+=e.y}
+const cx=sx/g.length,cy=sy/g.length;
+squads[owner].push({members:g,cx,cy,targetSquad:null,targetX:cx,targetY:cy,leader:g[0]});
+}}}
+
+function updateBrainDecay(now){
+  if(!updateBrainDecay._t)updateBrainDecay._t=now;
+  if(now-updateBrainDecay._t<3000)return;
+  updateBrainDecay._t=now;
+  brainDecay(brains.blue); brainDecay(brains.orange);
+}
+
+const hud=document.createElement('div');hud.className='hud';field.appendChild(hud);
+const overlayCanvas=document.createElement('canvas');overlayCanvas.className='overlay-canvas';field.appendChild(overlayCanvas);
+const octx=overlayCanvas.getContext('2d');
+let lastHudAt=0;
+function updateHUD(now){
+if(now-lastHudAt<CONFIG.hudUpdateMs)return;
+lastHudAt=now;
+let blueT=0,orangeT=0;
+for(const t of tiles.values()){if(t.owner==='blue')blueT++;else if(t.owner==='orange')orangeT++}
+const wb=war.blue.active?`<span class="warn">⚔ ${war.blue.killed}/${war.blue.target}</span>`:'—';
+const wo=war.orange.active?`<span class="warn">⚔ ${war.orange.killed}/${war.orange.target}</span>`:'—';
+const kb=Object.keys(brains.blue.exp).length,ko=Object.keys(brains.orange.exp).length;
+const fam=now<state.famineUntil?'<span class="warn">饥荒</span>':'';
+const plg=now<state.plagueUntil?'<span class="warn">瘟疫</span>':'';
+hud.innerHTML=
+`<span class="blue">蓝 ${cells.length}</span>  <span class="orange">橙 ${predators.length}</span>\n`+
+`豆 ${beans.length}  尸 ${corpses.length}\n`+
+`领地 <span class="blue">${blueT}</span> / <span class="orange">${orangeT}</span>\n`+
+`战况 蓝:${wb}  橙:${wo}\n`+
+`经验 <span class="blue">${kb}</span> / <span class="orange">${ko}</span>  ${fam}${plg}`;
+}
+function resizeCanvas(){overlayCanvas.width=field.clientWidth;overlayCanvas.height=field.clientHeight}
+function drawOverlay(){
+if(!state.showSquads){octx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);return}
+octx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+for(const owner of['blue','orange']){
+for(const sq of squads[owner]){
+if(!sq.targetSquad)continue;
+octx.strokeStyle=owner==='blue'?'rgba(127,227,184,0.45)':'rgba(255,184,119,0.45)';
+octx.lineWidth=1;
+octx.beginPath();octx.moveTo(sq.cx,sq.cy);octx.lineTo(sq.targetSquad.cx,sq.targetSquad.cy);octx.stroke();
+}}}
+function spawnBeanAt(x,y){const el=document.createElement('div');el.className='bean';el.style.left=x+'px';el.style.top=y+'px';field.appendChild(el);beans.push({el,x,y,heldBy:null,eaten:false})}
+function spawnBean(){const{w,h}=fieldSize();const r=CONFIG.beanSize/2+2;spawnBeanAt(r+Math.random()*(w-2*r),r+Math.random()*(h-2*r))}
+function playEatAnimation(bean,eater){
+if(bean.eaten)return;
+bean.eaten=true;
+const idx=beans.indexOf(bean);if(idx>=0)beans.splice(idx,1);
+if(bean.heldBy){bean.heldBy.heldBean=null;bean.heldBy=null}
+if(eater.heldBean===bean)eater.heldBean=null;
+const md=CONFIG.cellLen*0.5;
+const tx=eater.x+Math.cos(eater.angle)*md;const ty=eater.y+Math.sin(eater.angle)*md;
+const anim=bean.el.animate(
+[{left:bean.x+'px',top:bean.y+'px',transform:'translate(-50%,-50%) scale(1)',opacity:1},
+{left:tx+'px',top:ty+'px',transform:'translate(-50%,-50%) scale(0.1)',opacity:0}],
+{duration:320,easing:'cubic-bezier(0.5,-0.3,0.7,1)',fill:'forwards'});
+anim.onfinish=()=>{if(bean.el.parentNode)bean.el.remove()};
+eater.el.animate(
+[{transform:eater.el.style.transform+' scale(1)'},
+{transform:eater.el.style.transform+' scale(1.15)'},
+{transform:eater.el.style.transform+' scale(1)'}],
+{duration:240,easing:'ease-out'});
+}
+function makeCellDOM(isPredator){
+const el=document.createElement('div');
+el.className='cell'+(isPredator?' predator':'');
+el.style.width=CONFIG.cellLen+'px';el.style.height=CONFIG.cellWid+'px';
+el.style.left='0px';el.style.top='0px';
+const body=document.createElement('div');body.className='cell-body';el.appendChild(body);
+const le=document.createElement('div');le.className='eye left';
+const lp=document.createElement('div');lp.className='pupil';le.appendChild(lp);
+const re=document.createElement('div');re.className='eye right';
+const rp=document.createElement('div');rp.className='pupil';re.appendChild(rp);
+el.appendChild(le);el.appendChild(re);
+return{el,body,leftEye:le,rightEye:re,leftPupil:lp,rightPupil:rp};
+}
+function baseEntity(type,x,y,angle){
+const isP=type==='predator';
+const dom=makeCellDOM(isP);
+dom.el.style.transform=`translate(${x}px, ${y}px) translate(-50%,-50%) rotate(${angle}rad)`;
+field.appendChild(dom.el);
+const now=performance.now();
+return{
+type,...dom,x,y,vx:0,vy:0,angle,
+size:CONFIG.cellLen,bornAt:now,cycleStart:now,fedThisCycle:false,
+dying:false,dead:false,splitting:false,speedMul:rand(0.8,1.3),
+wanderAngle:Math.random()*Math.PI*2,wanderTimer:0,
+heldBean:null,biteEndAt:0,hp:CONFIG.maxHP,mealsEaten:0,nextBiteAt:0,
+friend:null,warRole:'none',
+lifespan:rand(CONFIG.lifespanMin,CONFIG.lifespanMax),
+fatigue:0,ageFactor:1,currentScale:1,
+memory:{lastAttacker:null,lastAttackerAt:0,mournUntil:0},
+nextPerceptionAt:0,cachedEnemy:null,cachedEnemyD:Infinity,
+invasionTarget:null,invasionStartAt:0,
+nextDecisionAt:now,currentAction:'wander',actionStartedAt:now,
+actionPending:false,actionWindowEnd:0,actionWindowBase:null,
+exploreBias:rand(0,1),
+};
+}
+function findSpawnPos(){const{w,h}=fieldSize();const margin=CONFIG.cellLen;return{x:rand(margin,w-margin),y:rand(margin,h-margin)}}
+function createCell(atX,atY){let x,y;if(atX!==undefined){x=atX;y=atY}else{const p=findSpawnPos();x=p.x;y=p.y}const angle=Math.random()*Math.PI*2;const c=baseEntity('blue',x,y,angle);cells.push(c);return c}
+function createPredator(atX,atY){let x,y;if(atX!==undefined){x=atX;y=atY}else{const p=findSpawnPos();x=p.x;y=p.y}const angle=Math.random()*Math.PI*2;const p2=baseEntity('predator',x,y,angle);predators.push(p2);return p2}
+function killCell(c,skipCorpse){
+if(c.dying||c.dead||c.splitting)return;
+c.dying=true;c.el.classList.add('dying');
+c.leftEye.classList.add('dead');c.rightEye.classList.add('dead');
+war.blue.deaths++;
+if(state.selected===c)state.selected=null;
+if(c.friend){c.friend.friend=null;c.friend.memory.mournUntil=performance.now()+3000;c.friend=null}
+if(c.heldBean){const b=c.heldBean;b.heldBy=null;c.heldBean=null;b.x=c.x;b.y=c.y;b.el.style.left=b.x+'px';b.el.style.top=b.y+'px'}
+setTimeout(()=>{c.el.remove();c.dead=true;const i=cells.indexOf(c);if(i>=0)cells.splice(i,1);if(!skipCorpse)spawnCorpse(c.x,c.y,'blue')},CONFIG.dyingDuration);
+}
+function killPredator(p,skipCorpse){
+if(p.dying||p.dead||p.splitting)return;
+p.dying=true;p.el.classList.add('dying');
+p.leftEye.classList.add('dead');p.rightEye.classList.add('dead');
+war.orange.deaths++;
+if(state.selected===p)state.selected=null;
+if(p.friend){p.friend.friend=null;p.friend.memory.mournUntil=performance.now()+3000;p.friend=null}
+if(p.heldBean){const b=p.heldBean;b.heldBy=null;p.heldBean=null;b.x=p.x;b.y=p.y;b.el.style.left=b.x+'px';b.el.style.top=b.y+'px'}
+setTimeout(()=>{p.el.remove();p.dead=true;const i=predators.indexOf(p);if(i>=0)predators.splice(i,1);if(!skipCorpse)spawnCorpse(p.x,p.y,'orange')},CONFIG.dyingDuration);
+}
+function onAte(ent){
+ent.fedThisCycle=true;
+ent.hp=Math.min(CONFIG.maxHP,ent.hp+CONFIG.eatHeal);
+ent.mealsEaten++;
+if(ent.mealsEaten>=CONFIG.mealsToSplit&&!ent.splitting){ent.mealsEaten=0;splitEntity(ent)}
+}
+function splitEntity(ent){
+if(ent.splitting||ent.dying||ent.dead)return;
+ent.splitting=true;
+const cx=ent.x,cy=ent.y,ang=ent.angle;
+const isP=ent.type==='predator';
+ent.el.classList.add('splitting');
+setTimeout(()=>{
+ent.el.remove();
+if(isP){const i=predators.indexOf(ent);if(i>=0)predators.splice(i,1)}
+else{const i=cells.indexOf(ent);if(i>=0)cells.splice(i,1)}
+ent.dead=true;
+const off=CONFIG.cellLen*0.8;
+const px=Math.cos(ang+Math.PI/2),py=Math.sin(ang+Math.PI/2);
+for(let k=-1;k<=1;k+=2){
+const np=isP?createPredator():createCell();
+np.x=cx+px*off*k;np.y=cy+py*off*k;
+const{w,h}=fieldSize();
+np.x=Math.max(CONFIG.cellLen,Math.min(w-CONFIG.cellLen,np.x));
+np.y=Math.max(CONFIG.cellLen,Math.min(h-CONFIG.cellLen,np.y));
+np.angle=ang;
+np.exploreBias=Math.max(0,Math.min(1,ent.exploreBias+rand(-0.15,0.15)));
+np.el.animate(
+[{transform:`translate(${np.x}px, ${np.y}px) translate(-50%,-50%) rotate(${ang}rad) scale(0)`},
+{transform:`translate(${np.x}px, ${np.y}px) translate(-50%,-50%) rotate(${ang}rad) scale(1.15)`},
+{transform:`translate(${np.x}px, ${np.y}px) translate(-50%,-50%) rotate(${ang}rad) scale(1)`}],
+{duration:420,easing:'cubic-bezier(0.34,1.56,0.64,1)'});
+}},CONFIG.splitDuration);
+}
+function spawnCorpse(x,y,color){
+const el=document.createElement('div');el.className='corpse '+color;
+el.style.width=CONFIG.cellLen*0.9+'px';el.style.height=CONFIG.cellWid*0.9+'px';
+el.style.left=x+'px';el.style.top=y+'px';field.appendChild(el);
+corpses.push({el,x,y,color,eatsLeft:CONFIG.corpseMaxEats,lastRotAt:performance.now(),bornAt:performance.now(),eaten:false});
+}
+function eatCorpse(corpse,eater){
+if(corpse.eaten)return;
+const eaterOwner=ownerOf(eater);
+if(corpse.color===eaterOwner)return;
+corpse.eatsLeft--;
+corpse.el.classList.remove('eaten');void corpse.el.offsetWidth;corpse.el.classList.add('eaten');
+eater.el.animate(
+[{transform:eater.el.style.transform+' scale(1)'},
+{transform:eater.el.style.transform+' scale(1.18)'},
+{transform:eater.el.style.transform+' scale(1)'}],
+{duration:240,easing:'ease-out'});
+if(corpse.eatsLeft<=0)removeCorpse(corpse);
+}
+function removeCorpse(corpse){
+if(corpse.eaten)return;
+corpse.eaten=true;
+const anim=corpse.el.animate(
+[{transform:'translate(-50%,-50%) scale(1)',opacity:1},
+{transform:'translate(-50%,-50%) scale(0)',opacity:0}],
+{duration:300,easing:'ease-in',fill:'forwards'});
+anim.onfinish=()=>{if(corpse.el.parentNode)corpse.el.remove()};
+const idx=corpses.indexOf(corpse);if(idx>=0)corpses.splice(idx,1);
+}
+function updateEyes(ent,lx,ly){
+if(ent.dying||ent.splitting)return;
+const dx=lx-ent.x,dy=ly-ent.y;
+const wa=Math.atan2(dy,dx);const la=wa-ent.angle;
+const ox=Math.cos(la)*1.5,oy=Math.sin(la)*1.5;
+const t=`translate(${ox}px, ${oy}px)`;
+ent.leftPupil.style.transform=t;ent.rightPupil.style.transform=t;
+}
+function playHitEffect(target,attacker){
+attacker.el.classList.remove('attacking');void attacker.el.offsetWidth;attacker.el.classList.add('attacking');
+target.el.classList.remove('hit');void target.el.offsetWidth;target.el.classList.add('hit');
+target.memory.lastAttacker=attacker;target.memory.lastAttackerAt=performance.now();
+const dx=target.x-attacker.x,dy=target.y-attacker.y;
+const len=Math.hypot(dx,dy)||1;
+target.x+=(dx/len)*10;target.y+=(dy/len)*10;
+target.vx+=(dx/len)*100;target.vy+=(dy/len)*100;
+const isP=target.type==='predator';
+const sc=isP?'#e89a4a':'#5fc79a';const sg=isP?'rgba(255,170,80,0.9)':'rgba(120,240,190,0.9)';
+for(let i=0;i<5;i++){
+const shard=document.createElement('div');shard.className='shard';
+const size=3+Math.random()*4;shard.style.width=size+'px';shard.style.height=size+'px';
+shard.style.background=sc;shard.style.boxShadow=`0 0 6px ${sg}`;
+const ang=Math.random()*Math.PI*2;const d=16+Math.random()*22;
+shard.style.setProperty('--dx',Math.cos(ang)*d+'px');shard.style.setProperty('--dy',Math.sin(ang)*d+'px');
+shard.style.left=target.x+'px';shard.style.top=target.y+'px';field.appendChild(shard);
+setTimeout(()=>shard.remove(),1000);
+}}
+function showVoteBubble(ent,text){
+const b=document.createElement('div');b.className='vote-bubble';b.textContent=text;
+b.style.left=ent.x+'px';b.style.top=ent.y+'px';field.appendChild(b);
+setTimeout(()=>b.remove(),2600);
+}
+function canSee(ent,target,range){
+const d=dist(ent.x,ent.y,target.x,target.y);
+if(d>range)return false;
+const ang=Math.atan2(target.y-ent.y,target.x-ent.x);
+let diff=ang-ent.angle;
+while(diff>Math.PI)diff-=Math.PI*2;
+while(diff<-Math.PI)diff+=Math.PI*2;
+return Math.abs(diff)<=CONFIG.visionCone/2;
+}
+function declareWar(owner,instigator){
+const w=war[owner];
+if(!w||w.active)return;
+const target=Math.floor(rand(CONFIG.warKillMin,CONFIG.warKillMax+1));
+w.active=true;w.target=target;w.killed=0;w.startAt=performance.now();
+w.declares=(w.declares||0)+1;
+if(instigator)showVoteBubble(instigator,`领地被侵犯! 宣战 目标${target}`);
+const enemyOwner=owner==='blue'?'orange':'blue';
+for(const side of[owner,enemyOwner]){
+const list=listOfOwner(side);
+for(const o of list){
+if(o.dying||o.splitting)continue;
+if(o.hp<=1)continue;
+if(o.warRole==='none'||o.warRole==='pending')o.warRole='pending';
+}}
+squadPlanAt=0;
+}
+function endWar(owner){
+const w=war[owner];
+if(!w)return;
+w.active=false;
+const list=listOfOwner(owner);
+for(const e of list){e.warRole='none';e.el.classList.remove('fighting','carrier');e.squad=null}
+}
+function onTileInvaded(loserOwner,invader){
+if(!loserOwner)return;
+if(war[loserOwner]&&war[loserOwner].active)return;
+const list=listOfOwner(loserOwner);
+let witness=null;
+for(const c of list){
+if(c.dying||c.splitting)continue;
+const d=dist(c.x,c.y,invader.x,invader.y);
+if(d<CONFIG.alertRange){witness=c;break}
+}
+if(witness)declareWar(loserOwner,witness);
+}
+function resolveCollisions(){
+const all=cells.concat(predators);
+for(let i=0;i<all.length;i++){
+const a=all[i];if(a.dying||a.splitting)continue;
+for(let j=i+1;j<all.length;j++){
+const b=all[j];if(b.dying||b.splitting)continue;
+const minD=a.size*0.5+b.size*0.5;
+const dx=b.x-a.x,dy=b.y-a.y;const d=Math.hypot(dx,dy)||0.001;
+if(d<minD){
+const ov=minD-d;const nx=dx/d,ny=dy/d;
+a.x-=nx*ov*0.5;a.y-=ny*ov*0.5;b.x+=nx*ov*0.5;b.y+=ny*ov*0.5;
+a.vx-=nx*30;a.vy-=ny*30;b.vx+=nx*30;b.vy+=ny*30;
+}}}
+for(const c of all){
+if(c.dying||c.splitting)continue;
+for(const bean of beans){
+if(bean.eaten||bean.heldBy)continue;
+const cr=CONFIG.cellWid*0.5;const br=CONFIG.beanSize*0.5;
+const minD=cr+br+2;const dx=bean.x-c.x,dy=bean.y-c.y;const d=Math.hypot(dx,dy)||0.001;
+if(d<minD){
+const ov=minD-d;const nx=dx/d,ny=dy/d;
+bean.x+=nx*ov;bean.y+=ny*ov;
+bean.el.style.left=bean.x+'px';bean.el.style.top=bean.y+'px';
+c.x-=nx*ov*0.15;c.y-=ny*ov*0.15;
+}}}
+for(let i=0;i<beans.length;i++){
+const a=beans[i];if(a.heldBy||a.eaten)continue;
+for(let j=i+1;j<beans.length;j++){
+const b=beans[j];if(b.heldBy||b.eaten)continue;
+const minD=CONFIG.beanSize;const dx=b.x-a.x,dy=b.y-a.y;const d=Math.hypot(dx,dy)||0.001;
+if(d<minD){
+const ov=(minD-d)*0.5;const nx=dx/d,ny=dy/d;
+a.x-=nx*ov;a.y-=ny*ov;b.x+=nx*ov;b.y+=ny*ov;
+a.el.style.left=a.x+'px';a.el.style.top=a.y+'px';
+b.el.style.left=b.x+'px';b.el.style.top=b.y+'px';
+}}}
+for(const c of all){if(c.dying||c.splitting)continue;pushOutOfEnemyTiles(c)}
+}
+function tryGrabCorpse(ent){
+const enemyOwner=enemyOwnerOf(ent);
+let best=null,bestD=Infinity;
+for(const c of corpses){
+if(c.eaten)continue;
+if(c.color!==enemyOwner)continue;
+const d=dist(ent.x,ent.y,c.x,c.y);
+if(d<CONFIG.corpseEatRange&&d<bestD){bestD=d;best=c}
+}
+if(best){eatCorpse(best,ent);onAte(ent);return true}
+return false;
+}
+function computeObs(ent){
+const owner=ownerOf(ent);
+const enemyOwner=enemyOwnerOf(ent);
+const nearestBean=findNearestBean(ent);
+const nearestEnemy=ent.cachedEnemy;
+const myTile=tileAt(ent.x,ent.y);
+const inOwnTile=!!myTile&&myTile.owner===owner;
+const inEnemyTile=!!myTile&&myTile.owner===enemyOwner;
+const warActive=war[owner].active;
+const cycleElapsed=performance.now()-ent.cycleStart;
+const needFood=cycleElapsed>CONFIG.idlePart&&!ent.fedThisCycle;
+return{haveBean:nearestBean!==null,haveEnemy:nearestEnemy!==null,inOwnTile,inEnemyTile,hpLow:ent.hp<=1,warActive,needFood,nearFriend:false};
+}
+function findNearestBean(ent){
+let best=null,bestD=Infinity;
+const nearby = getNearbyEntities(ent.x, ent.y, 'beans');
+for(const b of nearby){
+if(b.eaten||b.heldBy)continue;
+const d=dist(ent.x,ent.y,b.x,b.y);
+if(d<CONFIG.seekFoodRange&&d<bestD){bestD=d;best=b}
+}
+return best;
+}
+function findNearestFriend(ent){
+const isP=ent.type==='predator';
+const sameKind=isP?predators:cells;
+let best=null,bestD=Infinity;
+for(const o of sameKind){
+if(o===ent||o.dying||o.dead||o.splitting)continue;
+const d=dist(ent.x,ent.y,o.x,o.y);
+if(d<CONFIG.seekFriendRange&&d<bestD){bestD=d;best=o}
+}
+return best;
+}
+function startActionWindow(ent,owner){
+ent.actionPending=true;
+ent.actionWindowEnd=performance.now()+CONFIG.outcomeWindowMs;
+ent.actionWindowBase=computeRaceMetrics(owner);
+ent.actionWindowBase.selfHp=ent.hp;
+ent.actionWindowBase.selfAlive=!(ent.dying||ent.dead);
+ent.actionWindowBase.selfMeals=ent.mealsEaten;
+}
+function settleActionWindow(ent,owner){
+if(!ent.actionPending||!ent.actionWindowBase)return 0;
+ent.actionPending=false;
+const base=ent.actionWindowBase;
+const cur=computeRaceMetrics(owner);
+cur.selfHp=ent.hp;
+cur.selfAlive=!(ent.dying||ent.dead);
+cur.selfMeals=ent.mealsEaten;
+const out=outcomeToScore(base,cur);
+if(base.selfAlive&&cur.selfAlive){
+out.selfSafety=Math.max(-1,Math.min(1,(cur.selfHp-base.selfHp)*0.4+0.2));
+out.selfBirth=cur.selfMeals>base.selfMeals?0.8:(base.needFood?-0.5:0);
+}else if(!cur.selfAlive){
+out.selfSafety=-1;
+out.selfBirth=0;
+}
+const brain=brainOf(owner);
+const score=combineOutcomes(brain.weights,out);
+return score;
+}
+
+// === 执行动作 ===
+function applyAction(ent,actionId,dt,now){
+const isP=ent.type==='predator';
+const owner=ownerOf(ent);
+const actionObj = ACTIONS.find(a=>a.id===actionId) || ACTIONS[0];
+const ops = actionObj.ops || [actionId];
+let targetX=null,targetY=null,speed=CONFIG.speedIdle;
+
+for(const op of ops){
+  if(op==='eat'){
+    const bean=findNearestBean(ent);
+    if(bean){
+      const d=dist(ent.x,ent.y,bean.x,bean.y);
+      targetX=bean.x;targetY=bean.y;speed=CONFIG.speedHunt;
+      if(d<CONFIG.eatRange+CONFIG.beanSize*0.5){playEatAnimation(bean,ent);onAte(ent);break}
+    }
+  }
+  else if(op==='paint'){
+    if(!war[owner].active){
+      const spot=findPaintSpot(ent);
+      if(spot){
+        const d=dist(ent.x,ent.y,spot.x,spot.y);
+        if(d>CONFIG.tileSize){targetX=spot.x;targetY=spot.y;speed=CONFIG.speedIdle*0.9}
+        else{paintTile(spot.gx,spot.gy,owner);break}
+      }
+    }
+  }
+  else if(op==='invade'){
+    if(!war[owner].active){
+      if(!ent.invasionTarget){const t=findInvasionTarget(ent);if(t){ent.invasionTarget={gx:t.gx,gy:t.gy,x:t.x,y:t.y};ent.invasionStartAt=now}}
+      if(ent.invasionTarget){
+        const tg=ent.invasionTarget;
+        const d=dist(ent.x,ent.y,tg.x,tg.y);
+        targetX=tg.x;targetY=tg.y;speed=isP?CONFIG.speedPredator:CONFIG.speedHunt;
+        if(d<CONFIG.tileSize*0.6){
+          const t=tiles.get(tileKey(tg.gx,tg.gy));
+          if(t&&t.owner!==owner){
+            const prevOwner=t.owner;t.el.className='tile '+owner;t.owner=owner;
+            showVoteBubble(ent,'抢一格');
+            if(prevOwner==='blue'||prevOwner==='orange')onTileInvaded(prevOwner,ent);
+          }
+          ent.invasionTarget=null;break;
+        }
+        if(ent.invasionTarget&&now-ent.invasionStartAt>CONFIG.invasionGiveUp)ent.invasionTarget=null;
+      }
+    }
+  }
+  else if(op==='fight'){
+    const nearestEnemy=ent.cachedEnemy;
+    if(nearestEnemy){
+      const d=ent.cachedEnemyD;
+      targetX=nearestEnemy.x;targetY=nearestEnemy.y;speed=isP?CONFIG.speedPredator:CONFIG.speedHunt;
+      if(d<CONFIG.preyBiteRange&&now>=ent.nextBiteAt){
+        ent.nextBiteAt=now+CONFIG.biteCooldown;
+        nearestEnemy.hp=Math.max(0,nearestEnemy.hp-1);
+        playHitEffect(nearestEnemy,ent);
+        if(nearestEnemy.hp<=0){
+          if(isP)killCell(nearestEnemy);else killPredator(nearestEnemy);
+          if(isP)war.orange.killed++;else war.blue.killed++;
+        }else{ent.fedThisCycle=true}
+        break;
+      }
+    }
+  }
+  else if(op==='flee'){
+    const threat=ent.cachedEnemy;
+    if(threat){
+      const dx=ent.x-threat.x,dy=ent.y-threat.y;const len=Math.hypot(dx,dy)||1;
+      targetX=ent.x+dx/len*100;targetY=ent.y+dy/len*100;speed=CONFIG.speedFlee;
+      break;
+    }
+  }
+  else if(op==='carrier'){
+    if(ent.heldBean){
+      const recv=findNearestFriend(ent);
+      if(recv){
+        const d=dist(ent.x,ent.y,recv.x,recv.y);
+        targetX=recv.x;targetY=recv.y;speed=CONFIG.speedChase;
+        if(d<CONFIG.handoffRange){
+          const b=ent.heldBean;ent.heldBean=null;b.heldBy=null;
+          playEatAnimation(b,recv);onAte(recv);break;
+        }
+      }
+    }else{
+      const bean=findNearestBean(ent);
+      if(bean){
+        const d=dist(ent.x,ent.y,bean.x,bean.y);
+        targetX=bean.x;targetY=bean.y;speed=CONFIG.speedHunt;
+        const mx=ent.x+Math.cos(ent.angle)*(CONFIG.cellLen*0.5);
+        const my=ent.y+Math.sin(ent.angle)*(CONFIG.cellLen*0.5);
+        const mtb=Math.hypot(bean.x-mx,bean.y-my);
+        if(mtb<CONFIG.biteRange+CONFIG.beanSize*0.5&&d<CONFIG.cellLen*0.5+CONFIG.beanSize*0.5+4){
+          bean.heldBy=ent;ent.heldBean=bean;ent.biteEndAt=now+CONFIG.biteGiveUpTime;break;
+        }
+      }
+    }
+  }
+  else if(op==='social'){
+    const friend=findNearestFriend(ent);
+    if(friend){
+      const d=dist(ent.x,ent.y,friend.x,friend.y);
+      targetX=friend.x;targetY=friend.y;speed=CONFIG.speedChase;
+      if(d<CONFIG.handoffRange&&Math.random()<CONFIG.friendChance&&!ent.friend&&!friend.friend){
+        ent.friend=friend;friend.friend=ent;
+        ent.el.classList.add('friend');friend.el.classList.add('friend');
+        showVoteBubble(ent,'成了朋友');break;
+      }
+    }
+  }
+}
+
+if(targetX===null){
+  ent.wanderTimer-=dt;
+  if(ent.wanderTimer<=0){ent.wanderAngle+=rand(-0.9,0.9);ent.wanderTimer=rand(1.5,3.5)}
+  targetX=ent.x+Math.cos(ent.wanderAngle)*50;targetY=ent.y+Math.sin(ent.wanderAngle)*50;speed=CONFIG.speedIdle;
+}
+return{targetX,targetY,speed};
+}
+
+function tick(now){
+  const rawDt=Math.min((now-lastTime)/1000,0.05);
+  lastTime=now;
+  if(state.paused){requestAnimationFrame(tick);return}
+  const dt=rawDt*state.timeScale;
+  updateHUD(now);
+  updateBrainDecay(now);
+  updateSpatialGrid();
+
+  for(const side of['blue','orange']){
+    const b=brains[side];b._owner=side;
+    if(now-b.lastWeightShift>=CONFIG.weightsPeriodMs){
+       b.lastWeightShift = now;
+    }
+  }
+  if(now<state.plagueUntil&&now>=state.plagueNextTick){
+    state.plagueNextTick=now+500;
+    for(const e of cells.concat(predators)){
+      if(e.dying||e.splitting)continue;
+      e.hp=Math.max(0,e.hp-1);
+      if(e.hp<=0){if(e.type==='predator')killPredator(e);else killCell(e)}
+    }
+  }
+  if(war.blue.active||war.orange.active){
+    if(now-squadPlanAt>SQUAD_REPLAN_MS)planSquads();
+  }else{
+    if(squads.blue.length||squads.orange.length){
+      squads.blue=[];squads.orange=[];
+      for(const c of cells)c.squad=null;
+      for(const p of predators)p.squad=null;
+    }
+  }
+  if(now>=nextBeanAt&&now>=state.famineUntil){
+    spawnBean();
+    nextBeanAt=now+CONFIG.beanInterval;
+  }
+  for(let i=corpses.length-1;i>=0;i--){
+    const c=corpses[i];
+    if(c.eaten)continue;
+    if(now-c.bornAt>CONFIG.corpseLifeTime){removeCorpse(c);continue}
+    if(now-c.lastRotAt>CONFIG.corpseRotInterval){
+      c.lastRotAt=now;
+      const ratio=Math.max(0,1-(now-c.bornAt)/CONFIG.corpseLifeTime);
+      c.el.style.filter=`brightness(${0.4+0.6*ratio}) saturate(${0.5+0.5*ratio})`;
+    }
+  }
+  const all=cells.concat(predators);
+  for(const ent of all){
+    if(ent.dying||ent.splitting)continue;
+    if(now-ent.bornAt>ent.lifespan){
+      if(ent.type==='predator')killPredator(ent);else killCell(ent);
+      continue;
+    }
+    const ageRatio=(now-ent.bornAt)/ent.lifespan;
+    ent.ageFactor=ageRatio<0.66?1:1-(ageRatio-0.66)/0.34*0.5;
+    const isP=ent.type==='predator';
+    const owner=ownerOf(ent);
+    const myWar=war[owner];
+    if(myWar.active&&ent.warRole==='none'&&ent.hp>1){
+      ent.warRole=Math.random()<0.6?'fighting':'carrier';
+      if(ent.warRole==='fighting')ent.el.classList.add('fighting');else ent.el.classList.add('carrier');
+    }
+    if(ent.warRole==='pending'){
+      if(ent.hp<=1){ent.warRole='none';ent.el.classList.remove('fighting','carrier')}
+      else{ent.warRole=Math.random()<0.6?'fighting':'carrier';if(ent.warRole==='fighting')ent.el.classList.add('fighting');else ent.el.classList.add('carrier')}
+    }
+    if(!myWar.active&&ent.warRole!=='none'){
+      ent.warRole='none';ent.el.classList.remove('fighting','carrier');ent.squad=null;
+    }
+    const cycleElapsed=now-ent.cycleStart;
+    if(cycleElapsed>=CONFIG.cycleTime){
+      if(ent.fedThisCycle){ent.cycleStart=now;ent.fedThisCycle=false}
+      else{if(isP)killPredator(ent);else killCell(ent);continue}
+    }
+    tryGrabCorpse(ent);
+    if(now>=ent.nextPerceptionAt){
+      ent.nextPerceptionAt=now+CONFIG.perceptionDelay*1000;
+      let ne=null,ned=Infinity;
+      const enemies=isP?cells:predators;
+      for(const o of enemies){
+        if(o.dying||o.dead||o.splitting)continue;
+        if(!canSee(ent,o,CONFIG.seekPreyRange))continue;
+        const d=dist(ent.x,ent.y,o.x,o.y);
+        if(d<ned){ned=d;ne=o}
+      }
+      ent.cachedEnemy=ne;ent.cachedEnemyD=ned;
+    }
+    const obs=computeObs(ent);
+    const brain=brainOf(owner);
+    if(ent.actionPending&&now>=ent.actionWindowEnd){
+      const score=settleActionWindow(ent,owner);
+      if(ent.lastState&&ent.lastAction){
+        updateDictionary(brain, ent.lastState, ent.lastAction, score);
+      }
+      ent.actionPending=false;
+    }
+    if(now>=ent.nextDecisionAt&&!ent.actionPending){
+      const action=brainChoose(brain,obs,ent);
+      ent.lastAction=action;
+      ent.lastState=brainKey(obs);
+      ent.currentAction=action;
+      ent.nextDecisionAt=now+CONFIG.decisionCooldown*(0.7+Math.random()*0.6);
+      startActionWindow(ent,owner);
+    }
+    const res=applyAction(ent,ent.currentAction,dt,now);
+    let targetX=res.targetX,targetY=res.targetY,speed=res.speed;
+    let desiredVx,desiredVy;
+    if(targetX!==null){
+      const dx=targetX-ent.x,dy=targetY-ent.y;
+      const len=Math.hypot(dx,dy)||1;
+      desiredVx=(dx/len)*speed*ent.speedMul;desiredVy=(dy/len)*speed*ent.speedMul;
+    }else{
+      ent.wanderTimer-=dt;
+      if(ent.wanderTimer<=0){ent.wanderAngle+=rand(-0.9,0.9);ent.wanderTimer=rand(1.5,3.5)}
+      desiredVx=Math.cos(ent.wanderAngle)*CONFIG.speedIdle*ent.speedMul;
+      desiredVy=Math.sin(ent.wanderAngle)*CONFIG.speedIdle*ent.speedMul;
+    }
+    const lerp=targetX!==null?0.08:0.05;
+    ent.vx+=(desiredVx-ent.vx)*lerp;ent.vy+=(desiredVy-ent.vy)*lerp;
+    ent.x+=ent.vx*dt;ent.y+=ent.vy*dt;
+    pushOutOfEnemyTiles(ent);
+    const sp=Math.hypot(ent.vx,ent.vy);
+    if(sp>CONFIG.speedIdle)ent.fatigue=Math.min(1,ent.fatigue+CONFIG.fatigueRate*dt);
+    else ent.fatigue=Math.max(0,ent.fatigue-CONFIG.fatigueRecover*dt);
+    const m=CONFIG.cellWid*0.5;
+    let pushed=false;
+    if(ent.x<m){ent.x=m;ent.vx+=40;pushed=true}
+    if(ent.x>field.clientWidth-m){ent.x=field.clientWidth-m;ent.vx-=40;pushed=true}
+    if(ent.y<m){ent.y=m;ent.vy+=40;pushed=true}
+    if(ent.y>field.clientHeight-m){ent.y=field.clientHeight-m;ent.vy-=40;pushed=true}
+    if(pushed){
+      const sp2=Math.hypot(ent.vx,ent.vy);
+      if(sp2>CONFIG.speedFlee){ent.vx=ent.vx/sp2*CONFIG.speedFlee;ent.vy=ent.vy/sp2*CONFIG.speedFlee}
+    }
+    const finalSp=Math.hypot(ent.vx,ent.vy);
+    if(finalSp>3){
+      const ta=Math.atan2(ent.vy,ent.vx);
+      let diff=ta-ent.angle;
+      while(diff>Math.PI)diff-=Math.PI*2;
+      while(diff<-Math.PI)diff+=Math.PI*2;
+      ent.angle+=diff*0.13;
+    }
+    const hpRatio=ent.hp/CONFIG.maxHP;
+    ent.el.style.opacity=0.5+0.5*hpRatio;
+    let s=1;
+    s*=0.75+0.25*hpRatio;
+    const sinceEat=now-ent.cycleStart;
+    const hr=Math.min(1,sinceEat/CONFIG.cycleTime);
+    if(hr>0.7)s*=0.8+0.2*(1-hr)/0.3;
+    if(sinceEat<2000)s*=1+0.1*(1-sinceEat/2000);
+    s*=1-ent.fatigue*0.1;
+    s*=ent.ageFactor;
+    ent.currentScale=s;
+    ent.el.style.transform=`translate(${ent.x}px, ${ent.y}px) translate(-50%,-50%) rotate(${ent.angle}rad) scale(${ent.currentScale})`;
+    if(ent.heldBean){
+      const b=ent.heldBean;const md=CONFIG.cellLen*0.5;
+      b.x=ent.x+Math.cos(ent.angle)*md;b.y=ent.y+Math.sin(ent.angle)*md;
+      b.el.style.left=b.x+'px';b.el.style.top=b.y+'px';
+    }
+    if(finalSp>35)ent.el.classList.add('running');else ent.el.classList.remove('running');
+    let lookX,lookY;
+    if(ent.currentAction==='fight'&&ent.cachedEnemy){lookX=ent.cachedEnemy.x;lookY=ent.cachedEnemy.y}
+    else{lookX=ent.x+ent.vx;lookY=ent.y+ent.vy}
+    updateEyes(ent,lookX,lookY);
+  }
+  for(const side of['blue','orange']){
+    const w=war[side];
+    if(!w.active)continue;
+    const timeout=now-w.startAt>CONFIG.warTimeout;
+    if(w.killed>=w.target||timeout){endWar(side)}
+  }
+  resolveCollisions();
+  drawOverlay();
+  requestAnimationFrame(tick);
+}
+
+function resetEcosystem(){
+  for(const t of tiles.values()){if(t.el.parentNode)t.el.remove()}
+  tiles.clear();
+  for(const b of beans){if(b.el.parentNode)b.el.remove()}
+  beans.length=0;
+  for(const c of corpses){if(c.el.parentNode)c.el.remove()}
+  corpses.length=0;
+  for(const c of cells){if(c.el.parentNode)c.el.remove()}
+  cells.length=0;
+  for(const p of predators){if(p.el.parentNode)p.el.remove()}
+  predators.length=0;
+  state.selected=null;
+  for(const k of['blue','orange']){war[k].active=false;war[k].killed=0;war[k].target=0;war[k].deaths=0;war[k].declares=0}
+  squads.blue=[];squads.orange=[];
+  brains.blue=makeBrain();brains.orange=makeBrain();
+  for(let i=0;i<12;i++)spawnBean();
+  for(let i=0;i<CONFIG.cellCount;i++)createCell();
+  for(let i=0;i<CONFIG.predatorCount;i++)createPredator();
+}
+function hitTestCell(x,y){
+  let best=null,bestD=Infinity;
+  for(const e of cells.concat(predators)){
+    if(e.dying||e.splitting||e.dead)continue;
+    const d=dist(x,y,e.x,e.y);
+    if(d<CONFIG.cellLen*0.6&&d<bestD){bestD=d;best=e}
+  }
+  return best;
+}
+function applySelectionInfo(){
+  const el=panelSelInfo;
+  const e=state.selected;
+  if(!e||e.dead||e.dying){el.textContent='未选中细胞';return}
+  const owner=ownerOf(e);
+  const oCls=owner==='blue'?'blue':'orange';
+  const roleTxt=e.warRole==='none'?'空闲':(e.warRole==='fighting'?'战斗':(e.warRole==='carrier'?'后勤':'待命'));
+  const hungerPct=Math.min(100,Math.round((performance.now()-e.cycleStart)/CONFIG.cycleTime*100));
+  const brain=brainOf(owner);
+  const key=brainKey(computeObs(e));
+  const record=brain.exp[key];
+  let learned='无';
+  if(record){
+     const actObj = ACTIONS.find(a=>a.id === record.bestAction);
+     learned = actObj ? actObj.name : record.bestAction;
+  }
+  el.innerHTML=
+    `<b class="${oCls}">${owner==='blue'?'蓝方':'橙方'}</b>\n`+
+    `HP: <b>${e.hp}/${CONFIG.maxHP}</b>  角色: <b>${roleTxt}</b>\n`+
+    `动作: <b>${e.currentAction}</b>\n`+
+    `饥饿: ${hungerPct}%\n`+
+    `本状态最优解: <b>${learned}</b>`;
+}
+function makeCtrl(label,hint,onClick,opts){
+  const d=document.createElement('div');
+  d.className='ctrl'+(opts&&opts.warn?' warn':'')+(opts&&opts.danger?' danger':'');
+  const l=document.createElement('span');l.className='ctrl-label';l.textContent=label;d.appendChild(l);
+  if(hint){const h=document.createElement('span');h.className='ctrl-hint';h.textContent=hint;d.appendChild(h)}
+  d.addEventListener('click',onClick);return d;
+}
+const panel=document.createElement('div');panel.className='panel';
+const panelHead=document.createElement('div');panelHead.className='panel-head';
+const panelTitle=document.createElement('span');panelTitle.className='panel-title';panelTitle.textContent='控制台';
+const panelToggle=document.createElement('span');panelToggle.className='panel-toggle';panelToggle.textContent='▾';
+panelHead.appendChild(panelTitle);panelHead.appendChild(panelToggle);panel.appendChild(panelHead);
+panelHead.addEventListener('click',()=>{panel.classList.toggle('collapsed');panelToggle.textContent=panel.classList.contains('collapsed')?'▸':'▾'});
+const panelTabs=document.createElement('div');panelTabs.className='panel-tabs';
+const tabObs=document.createElement('div');tabObs.className='panel-tab active';tabObs.textContent='观察';
+const tabAct=document.createElement('div');tabAct.className='panel-tab';tabAct.textContent='干预';
+panelTabs.appendChild(tabObs);panelTabs.appendChild(tabAct);panel.appendChild(panelTabs);
+const panelBody=document.createElement('div');panelBody.className='panel-body';panel.appendChild(panelBody);
+const panelSelInfo=document.createElement('div');panelSelInfo.className='sel-info';panelSelInfo.textContent='未选中细胞';
+let currentTab='obs';
+function renderPanel(){
+  panelBody.innerHTML='';
+  if(currentTab==='obs'){
+    const btnPause=makeCtrl(state.paused?'继续':'暂停','空格',()=>{state.paused=!state.paused;renderPanel()});
+    panelBody.appendChild(btnPause);
+    for(const sp of[0.5,1,2,4]){
+      const b=makeCtrl('倍速 '+sp+'x',sp===state.timeScale?'当前':'',()=>{state.timeScale=sp;renderPanel()});
+      if(sp===state.timeScale)b.classList.add('armed');
+      panelBody.appendChild(b);
+    }
+    const bTiles=makeCtrl('领地格显隐',field.classList.contains('hide-tiles')?'隐藏中':'显示中',()=>{field.classList.toggle('hide-tiles');renderPanel()});
+    panelBody.appendChild(bTiles);
+    const bBeans=makeCtrl('豆子显隐',field.classList.contains('hide-beans')?'隐藏中':'显示中',()=>{field.classList.toggle('hide-beans');renderPanel()});
+    panelBody.appendChild(bBeans);
+    const bSquads=makeCtrl('堆目标连线',state.showSquads?'开':'关',()=>{state.showSquads=!state.showSquads;renderPanel()});
+    if(state.showSquads)bSquads.classList.add('armed');
+    panelBody.appendChild(bSquads);
+    const brainInfo=document.createElement('div');brainInfo.className='brain-info';
+    const kb=Object.keys(brains.blue.exp).length,ko=Object.keys(brains.orange.exp).length;
+    brainInfo.innerHTML=
+      `经验库\n<span class="blue">蓝 ${kb} 状态</span>\n<span class="orange">橙 ${ko} 状态</span>`;
+    panelBody.appendChild(brainInfo);
+    const weightsInfo=document.createElement('div');weightsInfo.className='weights-info';
+    function fmtW(b){return OUTCOMES.map((o,i)=>`${OUTCOME_LABELS[o]}:${(b.weights[i]*100).toFixed(0)}%`).join('\n')}
+    weightsInfo.innerHTML=
+      `<span class="blue">蓝 六项权重</span>\n${fmtW(brains.blue)}\n<span class="orange">橙 六项权重</span>\n${fmtW(brains.orange)}`;
+    panelBody.appendChild(weightsInfo);
+    const bBrain=makeCtrl('查看经验库','',()=>{openBrainPanel()});
+    bBrain.classList.add('armed');
+    panelBody.appendChild(bBrain);
+    panelBody.appendChild(panelSelInfo);
+    applySelectionInfo();
+  }else{
+    const ownerSel=state.modeOwner;
+    const bBlue=makeCtrl('阵营: 蓝',ownerSel==='blue'?'当前':'切换',()=>{state.modeOwner='blue';renderPanel()});
+    if(ownerSel==='blue')bBlue.classList.add('armed');
+    const bOrange=makeCtrl('阵营: 橙',ownerSel==='orange'?'当前':'切换',()=>{state.modeOwner='orange';renderPanel()});
+    if(ownerSel==='orange')bOrange.classList.add('armed');
+    panelBody.appendChild(bBlue);panelBody.appendChild(bOrange);
+    const modes=[
+      {id:'bean',label:'投放豆子',hint:'点场地'},
+      {id:'cell',label:'投放细胞',hint:'点场地'},
+      {id:'heal',label:'治疗细胞',hint:'点细胞'},
+      {id:'starve',label:'饿死细胞',hint:'点细胞'},
+      {id:'split',label:'分裂细胞',hint:'点细胞'},
+      {id:'clearTile',label:'清格',hint:'点格子'},
+    ];
+    for(const m of modes){
+      const b=makeCtrl(m.label,m.hint,()=>{
+        state.activeMode=(state.activeMode===m.id)?null:m.id;
+        field.classList.toggle('mode-cursor',!!state.activeMode);
+        renderPanel();
+      });
+      if(state.activeMode===m.id)b.classList.add('armed');
+      panelBody.appendChild(b);
+    }
+    const wBlue=makeCtrl('强制宣战·蓝','',()=>{declareWar('blue',null);renderPanel()});
+    const wOrange=makeCtrl('强制宣战·橙','',()=>{declareWar('orange',null);renderPanel()});
+    panelBody.appendChild(wBlue);panelBody.appendChild(wOrange);
+    const eBlue=makeCtrl('强制停战·蓝','',()=>{endWar('blue');renderPanel()});
+    const eOrange=makeCtrl('强制停战·橙','',()=>{endWar('orange');renderPanel()});
+    panelBody.appendChild(eBlue);panelBody.appendChild(eOrange);
+    const bDisperse=makeCtrl('驱散战争堆','',()=>{squads.blue=[];squads.orange=[];squadPlanAt=0;renderPanel()});
+    panelBody.appendChild(bDisperse);
+    const bFamine=makeCtrl('饥荒 10s','',()=>{for(const b of beans){if(b.el.parentNode)b.el.remove()}beans.length=0;state.famineUntil=performance.now()+10000;renderPanel()},{warn:true});
+    panelBody.appendChild(bFamine);
+    const bPlague=makeCtrl('瘟疫 5s','',()=>{state.plagueUntil=performance.now()+5000;state.plagueNextTick=performance.now();renderPanel()},{danger:true});
+    panelBody.appendChild(bPlague);
+    const bRain=makeCtrl('天降食物 ×30','',()=>{for(let i=0;i<30;i++)spawnBean();renderPanel()});
+    panelBody.appendChild(bRain);
+    const bReset=makeCtrl('全屏清场','',()=>{resetEcosystem();renderPanel()},{danger:true});
+    panelBody.appendChild(bReset);
+  }
+}
+tabObs.addEventListener('click',()=>{currentTab='obs';tabObs.classList.add('active');tabAct.classList.remove('active');renderPanel()});
+tabAct.addEventListener('click',()=>{currentTab='act';tabAct.classList.add('active');tabObs.classList.remove('active');renderPanel()});
+field.appendChild(panel);field.appendChild(overlayCanvas);
+
+const brainOverlay=document.createElement('div');brainOverlay.className='brain-overlay';
+brainOverlay.innerHTML=`
+<div class="bo-head">
+<div class="bo-title">经验库 · 全库</div>
+<div class="bo-tabs">
+<div class="bo-tab active" data-side="blue">蓝方</div>
+<div class="bo-tab" data-side="orange">橙方</div>
+</div>
+<div class="bo-hint">当前每个状态只保留最优解</div>
+<div class="bo-close">✕ 关闭</div>
+</div>
+<div class="bo-body">
+<div class="bo-stats" id="boStats"></div>
+<div class="bo-weights" id="boWeights"></div>
+<div class="bo-table-wrap"><table class="bo-table" id="boTable"></table></div>
+</div>`;
+field.appendChild(brainOverlay);
+const boStats=brainOverlay.querySelector('#boStats');
+const boWeights=brainOverlay.querySelector('#boWeights');
+const boTable=brainOverlay.querySelector('#boTable');
+let boSide='blue';
+brainOverlay.querySelectorAll('.bo-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    boSide=t.dataset.side;
+    brainOverlay.querySelectorAll('.bo-tab').forEach(x=>x.classList.toggle('active',x===t));
+    renderBrainPanel();
+  });
+});
+brainOverlay.querySelector('.bo-close').addEventListener('click',()=>closeBrainPanel());
+function openBrainPanel(){state.brainPanelOpen=true;brainOverlay.classList.add('open');renderBrainPanel()}
+function closeBrainPanel(){state.brainPanelOpen=false;brainOverlay.classList.remove('open')}
+function describeKey(key){
+  const parts=[];
+  for(let i=0;i<STATE_KEYS.length;i++){
+    if(key[i]==='1')parts.push(STATE_LABELS[STATE_KEYS[i]]);
+  }
+  return parts.length?parts.join(' + '):'空';
+}
+function renderBrainPanel(){
+  const brain=brains[boSide];
+  const keys=Object.keys(brain.exp);
+  let totalStates=keys.length;
+  
+  let html='<thead><tr><th>状态</th><th>最优战术</th><th>综合评分</th></tr></thead><tbody>';
+  for(const k of keys){
+    const record = brain.exp[k];
+    const actObj = ACTIONS.find(a=>a.id === record.bestAction);
+    const actName = actObj ? actObj.name : record.bestAction;
+    html+=`<tr><td class="state-cell">${describeKey(k)}</td><td class="action-cell">${actName}</td><td class="v ${record.score>=0?'pos':'neg'}">${record.score.toFixed(2)}</td></tr>`;
+  }
+  html+='</tbody>';
+  boTable.innerHTML=html;
+  
+  boStats.innerHTML=
+    `<div class="bo-stat"><div class="bo-stat-label">已探索状态</div><div class="bo-stat-value">${totalStates}</div></div>`;
+  boWeights.innerHTML='<div class="bo-weights-title">六项指标权重</div>'+
+    OUTCOMES.map((o,i)=>`<div class="bo-weight-row"><span class="bo-weight-label">${OUTCOME_LABELS[o]}</span><span class="bo-weight-bar"><span style="width:${(brain.weights[i]*100).toFixed(1)}%"></span></span><span class="bo-weight-val">${(brain.weights[i]*100).toFixed(0)}%</span></div>`).join('');
+}
+
+const brainStyle=document.createElement('style');
+brainStyle.textContent=`
+.brain-overlay{position:fixed;inset:0;z-index:200;background:rgba(6,16,12,.94);backdrop-filter:blur(6px);display:none;flex-direction:column;font:12px/1.5 ui-monospace,monospace;color:#eafff5}
+.brain-overlay.open{display:flex}
+.bo-head{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.12);flex-wrap:wrap}
+.bo-title{font-size:14px;font-weight:bold;letter-spacing:1px}
+.bo-tabs{display:flex;gap:6px}
+.bo-tab{padding:4px 12px;border:1px solid rgba(255,255,255,.15);border-radius:4px;cursor:pointer;opacity:.6;transition:opacity .15s,background .15s}
+.bo-tab.active{opacity:1;background:rgba(255,255,255,.1)}
+.bo-tab:hover{opacity:.9}
+.bo-hint{opacity:.5;font-size:11px;margin-left:auto}
+.bo-close{margin-left:auto;cursor:pointer;padding:4px 10px;border:1px solid rgba(255,255,255,.2);border-radius:4px;opacity:.8}
+.bo-close:hover{opacity:1;background:rgba(255,255,255,.1)}
+.bo-body{flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px}
+.bo-stats{display:flex;gap:10px;flex-wrap:wrap}
+.bo-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:6px 10px;min-width:130px}
+.bo-stat-label{opacity:.5;font-size:10px}
+.bo-stat-value{font-weight:bold;font-size:14px;margin-top:2px}
+.bo-weights{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:10px 12px}
+.bo-weights-title{font-weight:bold;margin-bottom:6px;color:#7fe3b8}
+.bo-weight-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:2px 0}
+.bo-weight-label{width:90px;opacity:.8}
+.bo-weight-bar{flex:1;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.bo-weight-bar>span{display:block;height:100%;background:linear-gradient(90deg,#5fc79a,#ffb877);border-radius:4px;transition:width .3s}
+.bo-weight-val{width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.bo-table-wrap{overflow:auto;max-height:55vh;border:1px solid rgba(255,255,255,.1);border-radius:6px}
+.bo-table{width:100%;border-collapse:collapse;font-size:11px}
+.bo-table th,.bo-table td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;white-space:nowrap}
+.bo-table th{position:sticky;top:0;background:rgba(6,16,12,.98);z-index:1;font-weight:bold;opacity:.8}
+.bo-table .state-cell{opacity:.85;font-size:10px}
+.bo-table .action-cell{color:#7fe3b8;font-weight:bold}
+.bo-table .v{text-align:right;font-variant-numeric:tabular-nums}
+.bo-table .v.pos{color:#7fe3b8}
+.bo-table .v.neg{color:#ff8a6a}
+`;
+document.head.appendChild(brainStyle);
+
+field.addEventListener('click',(ev)=>{
+  if(state.brainPanelOpen)return;
+  const rect=field.getBoundingClientRect();
+  const x=ev.clientX-rect.left;const y=ev.clientY-rect.top;
+  if(state.activeMode){
+    const mode=state.activeMode;
+    state.activeMode=null;field.classList.remove('mode-cursor');
+    if(mode==='bean')spawnBeanAt(x,y);
+    else if(mode==='cell'){if(state.modeOwner==='blue')createCell(x,y);else createPredator(x,y)}
+    else if(mode==='heal'){const e=hitTestCell(x,y);if(e&&!e.dying&&!e.splitting){e.hp=Math.min(CONFIG.maxHP,e.hp+1)}}
+    else if(mode==='starve'){const e=hitTestCell(x,y);if(e&&!e.dying&&!e.splitting){e.hp=Math.max(0,e.hp-1);if(e.hp<=0){if(e.type==='predator')killPredator(e);else killCell(e)}}}
+    else if(mode==='split'){const e=hitTestCell(x,y);if(e&&!e.dying&&!e.splitting)splitEntity(e)}
+    else if(mode==='clearTile'){const gx=Math.floor(x/CONFIG.tileSize);const gy=Math.floor(y/CONFIG.tileSize);clearTile(gx,gy)}
+    renderPanel();return;
+  }
+  const e=hitTestCell(x,y);
+  if(e&&!e.dying&&!e.splitting){
+    if(state.selected)state.selected.el.classList.remove('selected','selectable');
+    state.selected=e;e.el.classList.add('selected','selectable');applySelectionInfo();
+  }else{
+    if(state.selected)state.selected.el.classList.remove('selected','selectable');
+    state.selected=null;applySelectionInfo();
+  }
+});
+function syncSelectable(){
+  for(const e of cells.concat(predators)){
+    if(!e.el)continue;
+    if(e.dying||e.splitting||e.dead)e.el.classList.remove('selectable');
+    else e.el.classList.add('selectable');
+  }
+}
+setInterval(syncSelectable,400);
+setInterval(()=>{if(currentTab==='obs')applySelectionInfo()},300);
+setInterval(()=>{if(state.brainPanelOpen)renderBrainPanel()},1500);
+resizeCanvas();
+window.addEventListener('resize',resizeCanvas);
+renderPanel();
+for(let i=0;i<12;i++)spawnBean();
+nextBeanAt=performance.now()+CONFIG.beanInterval;
+for(let i=0;i<CONFIG.cellCount;i++)createCell();
+for(let i=0;i<CONFIG.predatorCount;i++)createPredator();
+lastTime=performance.now();
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
